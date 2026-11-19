@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Campus Event Management System</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+:root{--n:#1e3a5f;--a:#f59e0b;--bg:#f2f5f9;--c:#fff;--t:#1b2733;--m:#64748b;--l:#d9e0e8;--r:#b42318;--g:#157f3b}
+*{box-sizing:border-box}body{margin:0;font:15px/1.5 system-ui,"Segoe UI",Arial,sans-serif;background:var(--bg);color:var(--t)}
+header{background:var(--n);color:#fff;padding:10px 16px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+header b{font-size:17px;margin-right:8px}nav{display:flex;gap:6px;flex-wrap:wrap;flex:1}
+nav button{background:transparent;color:#fff;border:1px solid #ffffff55;border-radius:8px;padding:5px 11px;cursor:pointer}
+nav button.on{background:var(--a);color:#1b2733;border-color:var(--a);font-weight:600}
+main{max-width:1050px;margin:0 auto;padding:16px}h2{margin:0 0 12px;font-size:19px}
+.c{background:var(--c);border:1px solid var(--l);border-radius:10px;padding:14px;margin-bottom:12px}
+.g{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(270px,1fr))}
+button,input,select,textarea{font:inherit}input,select,textarea{width:100%;padding:8px;border:1px solid var(--l);border-radius:8px;background:#fff;color:var(--t)}
+label{display:block;font-size:13px;color:var(--m);margin:8px 0 2px}
+.b{background:var(--n);color:#fff;border:0;border-radius:8px;padding:7px 13px;cursor:pointer;font-weight:600}
+.b.o{background:#fff;color:var(--n);border:1px solid var(--n)}.b.r{background:var(--r)}.b.s{padding:3px 9px;font-size:13px}
+.m{color:var(--m);font-size:13px}.tag{background:#e6edf5;color:var(--n);border-radius:6px;padding:1px 8px;font-size:12px;margin-left:6px}
+.st{font-weight:600}.st.approved{color:var(--g)}.st.rejected{color:var(--r)}.st.changes{color:#b45309}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:end}.row>*{flex:1;min-width:130px}
+table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:6px;border-bottom:1px solid var(--l);font-size:14px}
+.sc{overflow-x:auto}.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:3px}.cal div{background:#fff;border:1px solid var(--l);min-height:62px;padding:3px;font-size:11px;overflow:hidden}
+.cal .h{min-height:0;text-align:center;font-weight:600;background:none;border:0}.cal i{display:block;background:var(--a);color:#1b2733;border-radius:4px;padding:0 3px;margin-top:2px;font-style:normal;cursor:pointer}
+.ov{position:fixed;inset:0;background:#0008;display:flex;align-items:flex-start;justify-content:center;overflow:auto;padding:20px;z-index:5}
+.mb{background:#fff;border-radius:12px;padding:18px;max-width:640px;width:100%;position:relative}.x{position:absolute;right:10px;top:6px;border:0;background:none;font-size:24px;cursor:pointer}
+.hide{display:none!important}.toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:#1b2733;color:#fff;padding:10px 16px;border-radius:10px;z-index:9}
+.au{max-width:400px;margin:7vh auto;padding:0 14px}.err{color:var(--r);font-size:14px;min-height:20px}
+.cert{border:6px double var(--n);padding:30px;text-align:center;background:#fff}
+@media print{body *{visibility:hidden}.cert,.cert *{visibility:visible}.cert{position:absolute;left:0;top:0;width:100%}}
+</style></head><body>
+<div id="app"></div><div id="m" class="ov hide"></div><div id="t" class="toast hide"></div>
+<script>
+const $=s=>document.querySelector(s),E=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let db,me=null,tab='events',vm='list',last=Date.now(),F={q:'',cat:'',soc:'',venue:'',date:''},cm=new Date().toISOString().slice(0,7);
+const save=()=>{try{localStorage.setItem('cems',JSON.stringify(db))}catch(e){}},id=()=>Math.random().toString(36).slice(2,9);
+const addD=n=>{const d=new Date();d.setDate(d.getDate()+n);return d.toISOString().slice(0,10)},today=()=>addD(0);
+const CATS=['Technical','Sports','Cultural','Academic'],ST={pending_advisor:'Awaiting advisor',pending_admin:'Awaiting admin',approved:'Approved',rejected:'Rejected',changes:'Changes requested'};
+const toast=m=>{const t=$('#t');t.textContent=m;t.classList.remove('hide');clearTimeout(toast.k);toast.k=setTimeout(()=>t.classList.add('hide'),3200)};
+const H=async s=>{try{return[...new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(s)))].map(x=>x.toString(16).padStart(2,'0')).join('')}catch(e){return btoa(s)}};
+const U=i=>db.users.find(u=>u.id===i),V=i=>db.venues.find(v=>v.id===i),Ev=i=>db.events.find(e=>e.id===i),g=i=>$('#'+i).value.trim();
+const note=(u,m)=>db.notes.unshift({u,m,t:new Date().toLocaleString()});
+const taken=e=>db.regs.filter(r=>r.ev===e.id&&r.s==='confirmed').length,seats=e=>e.cap-taken(e);
+const clash=e=>db.events.find(x=>x.id!==e.id&&x.status==='approved'&&x.venue===e.venue&&x.date<=ed(e)&&e.date<=ed(x)&&x.start<e.end&&e.start<x.end);
+const ed=e=>e.d2||e.date,span=e=>ed(e)>e.date?e.date+' to '+ed(e):e.date;
+const sem=d=>d.slice(0,4)+' '+(+d.slice(5,7)<7?'Spring':'Fall');
+const dl=(n,t)=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([t],{type:'text/csv'}));a.download=n;a.click()};
+const csv=r=>r.map(x=>x.map(v=>'"'+String(v).replace(/"/g,'""').replace(/^([=+\-@])/,"'$1")+'"').join(',')).join('\n');
+
+async function init(){
+ try{db=JSON.parse(localStorage.getItem('cems'))}catch(e){}
+ if(!db){const mk=async(name,email,role,society)=>{const salt=id();return{id:id(),name,email,salt,h:await H(salt+'pass123'),role,society,active:1}};
+ const u=[await mk('Ayesha Student','student@uni.edu','student',''),await mk('Omar Organizer','organizer@uni.edu','organizer','CS Society'),await mk('Dr. Hina Advisor','advisor@uni.edu','advisor','CS Society'),await mk('Student Affairs Admin','admin@uni.edu','admin','')];
+ const ev=(t,c,d,s,e,v,cap,st)=>({id:id(),title:t,desc:'Open to all students. Bring your university ID card.',cat:c,society:'CS Society',date:addD(d),start:s,end:e,venue:v,cap,budget:15000,exp:cap,org:u[1].id,status:st,log:[]});
+ db={users:u,venues:[{id:'v1',name:'Main Auditorium',cap:300},{id:'v2',name:'Seminar Hall',cap:120},{id:'v3',name:'CS Lab 1',cap:40},{id:'v4',name:'Sports Ground',cap:500}],events:[ev('Hackathon 2026','Technical',5,'09:00','17:00','v1',200,'approved'),ev('AI Workshop','Academic',9,'11:00','13:00','v3',30,'approved'),ev('Cultural Night','Cultural',14,'18:00','21:00','v2',100,'pending_advisor')],regs:[],fb:[],notes:[]};save()}
+ setInterval(()=>{if(me&&Date.now()-last>30*60000){me=null;authView();toast('Session expired after 30 minutes of inactivity.')}},30000);
+ ['click','keydown'].forEach(k=>addEventListener(k,()=>last=Date.now()));authView()}
+
+/* ---------- auth ---------- */
+function authView(reg){$('#app').innerHTML=`<div class="au"><h2 style="font-size:23px">Campus Event Management System</h2><div class="c">
+${reg?`<label>Full name</label><input id="an">`:''}<label>University email</label><input id="ae" type="email"><label>Password (6+ characters)</label><input id="ap" type="password">
+<div class="err" id="er"></div><button class="b" onclick="${reg?'doReg()':'doLogin()'}">${reg?'Create account':'Log in'}</button>
+<button class="b o" onclick="authView(${!reg})">${reg?'I have an account':'Register as student'}</button></div>
+<p class="m">Demo logins (password pass123): student@uni.edu, organizer@uni.edu, advisor@uni.edu, admin@uni.edu</p></div>`}
+async function doReg(){const n=g('an'),e=g('ae').toLowerCase(),p=$('#ap').value,x=$('#er');
+ if(!n)return x.textContent='Enter your name.';if(!/^\S+@\S+\.edu(\.[a-z]{2})?$/i.test(e))return x.textContent='Use your university email (ending in .edu or .edu.pk).';
+ if(p.length<6)return x.textContent='Use a password with at least 6 characters.';if(db.users.some(u=>u.email===e))return x.textContent='This email is already registered.';
+ const salt=id();db.users.push({id:id(),name:n,email:e,salt,h:await H(salt+p),role:'student',society:'',active:1});save();toast('Account created. Log in now.');authView()}
+async function doLogin(){const e=g('ae').toLowerCase(),u=db.users.find(x=>x.email===e);
+ if(!u||u.h!==await H(u.salt+$('#ap').value))return $('#er').textContent='Email or password is incorrect.';
+ if(!u.active)return $('#er').textContent='This account is deactivated. Contact the administrator.';
+ me=u;tab='events';last=Date.now();db.regs.filter(r=>r.u===me.id&&r.s==='confirmed'&&!r.rem).forEach(r=>{const x=Ev(r.ev),d=new Date(x.date+'T'+x.start)-Date.now();if(d>0&&d<864e5){r.rem=1;note(me.id,`Reminder: "${x.title}" starts within 24 hours at ${V(x.venue).name}.`)}});save();render()}
+
+/* ---------- shell ---------- */
+const NAV={student:[['events','Events'],['tickets','My tickets']],organizer:[['events','Events'],['mine','My events']],advisor:[['events','Events'],['review','Approvals']],admin:[['events','Events'],['review','Approvals'],['admin','Venues & users'],['rep','Reports']]};
+function go(t){tab=t;render()}
+function render(){const n=db.notes.filter(x=>x.u===me.id).length;
+ $('#app').innerHTML=`<header><b>CEMS</b><nav>${[...NAV[me.role],['notes','Notifications ('+n+')']].map(([k,l])=>`<button class="${tab===k?'on':''}" onclick="go('${k}')">${l}</button>`).join('')}</nav><span class="m" style="color:#cbd5e1">${E(me.name)} (${me.role})</span><button class="b o s" onclick="me=null;authView()">Log out</button></header><main>${VIEW[tab]()}</main>`;
+ document.querySelectorAll('[data-qr]').forEach(el=>{if(window.QRCode)new QRCode(el,{text:el.dataset.qr,width:110,height:110})})}
+function modal(h){$('#m').innerHTML=`<div class="mb"><button class="x" onclick="closeM()" aria-label="Close">×</button>${h}</div>`;$('#m').classList.remove('hide')}
+const closeM=()=>$('#m').classList.add('hide');
+
+/* ---------- browse ---------- */
+function list(){const f=F,q=f.q.toLowerCase();const l=db.events.filter(e=>e.status==='approved'&&ed(e)>=today()&&(!q||(e.title+e.desc).toLowerCase().includes(q))&&(!f.cat||e.cat===f.cat)&&(!f.soc||e.society===f.soc)&&(!f.venue||e.venue===f.venue)&&(!f.date||(e.date<=f.date&&f.date<=ed(e)))).sort((a,b)=>a.date.localeCompare(b.date));
+ return l.length?`<div class="g">${l.map(e=>`<div class="c"><b>${E(e.title)}</b><span class="tag">${e.cat}</span><div class="m">${E(e.society)} · ${span(e)} ${e.start}–${e.end} · ${E(V(e.venue).name)}</div><p>${seats(e)>0?seats(e)+' seats left':'Full (waiting list open)'}</p><button class="b s" onclick="detail('${e.id}')">Details</button></div>`).join('')}</div>`:'<p class="m">No upcoming events match these filters.</p>'}
+function cal(){const [y,m]=cm.split('-').map(Number),f=new Date(y,m-1,1).getDay(),n=new Date(y,m,0).getDate();let h=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d=>`<div class="h">${d}</div>`).join('')+'<div style="border:0;background:none"></div>'.repeat(f);
+ for(let d=1;d<=n;d++){const k=cm+'-'+String(d).padStart(2,'0');h+=`<div>${d}${db.events.filter(e=>e.status==='approved'&&e.date<=k&&k<=ed(e)).map(e=>`<i onclick="detail('${e.id}')">${E(e.title)}</i>`).join('')}</div>`}
+ return`<div class="row" style="margin-bottom:8px"><button class="b o s" onclick="mv(-1)">Previous</button><b style="text-align:center">${cm}</b><button class="b o s" onclick="mv(1)">Next</button></div><div class="cal">${h}</div>`}
+function mv(d){const [y,m]=cm.split('-').map(Number),x=new Date(y,m-1+d,1);cm=x.getFullYear()+'-'+String(x.getMonth()+1).padStart(2,'0');render()}
+function setF(k,v){F[k]=v;if(k==='q'){$('#el').innerHTML=list()}else render()}
+function vEvents(){const o=(a,k,t)=>`<div><label>${t}</label><select onchange="setF('${k}',this.value)"><option value="">All</option>${a.map(([v,l])=>`<option value="${v}" ${F[k]===v?'selected':''}>${E(l)}</option>`).join('')}</select></div>`;
+ return`<h2>Upcoming events</h2><div class="c"><div class="row"><div><label>Search</label><input value="${E(F.q)}" oninput="setF('q',this.value)"></div>${o(CATS.map(c=>[c,c]),'cat','Category')}${o([...new Set(db.events.map(e=>e.society))].map(s=>[s,s]),'soc','Society')}${o(db.venues.map(v=>[v.id,v.name]),'venue','Venue')}<div><label>Date</label><input type="date" value="${F.date}" onchange="setF('date',this.value)"></div></div>
+ <div style="margin-top:10px"><button class="b ${vm==='list'?'':'o'} s" onclick="vm='list';render()">List</button> <button class="b ${vm==='cal'?'':'o'} s" onclick="vm='cal';render()">Calendar</button></div></div>${vm==='cal'?cal():`<div id="el">${list()}</div>`}`}
+function detail(i){const e=Ev(i),r=db.regs.find(x=>x.ev===i&&x.u===me.id&&x.s!=='cancelled');
+ modal(`<h2>${E(e.title)}</h2><p>${E(e.desc)}</p><p class="m">${e.cat} · ${E(e.society)}<br>${span(e)}, daily ${e.start}–${e.end}<br>Venue: ${E(V(e.venue).name)}<br>Seats left: ${seats(e)} of ${e.cap}</p>
+ ${me.role==='student'?(r?`<p class="st">You are ${r.s==='confirmed'?'registered':'on the waiting list'}.</p><button class="b r" onclick="cancelReg('${r.id}')">Cancel registration</button>`:`<button class="b" onclick="register('${i}')">${seats(e)>0?'Register':'Join waiting list'}</button>`):''}`)}
+function register(i){const e=Ev(i);if(db.regs.some(r=>r.ev===i&&r.u===me.id&&r.s!=='cancelled'))return;const s=seats(e)>0?'confirmed':'waitlist';
+ db.regs.push({id:id(),ev:i,u:me.id,s,code:'CEMS-'+i+'-'+id().toUpperCase(),att:0});note(me.id,s==='confirmed'?`Email sent: registration confirmed for "${e.title}". Your QR ticket is in My tickets.`:`You are on the waiting list for "${e.title}".`);save();closeM();toast(s==='confirmed'?'Registered. QR ticket created.':'Event is full. Added to waiting list.');render()}
+function cancelReg(i){const r=db.regs.find(x=>x.id===i),e=Ev(r.ev),was=r.s;r.s='cancelled';
+ if(was==='confirmed'){const w=db.regs.find(x=>x.ev===e.id&&x.s==='waitlist');if(w){w.s='confirmed';note(w.u,`A seat opened. You are now registered for "${e.title}".`)}}save();closeM();toast('Registration cancelled.');render()}
+
+/* ---------- student ---------- */
+function vTickets(){const l=db.regs.filter(r=>r.u===me.id&&r.s!=='cancelled');
+ return`<h2>My tickets</h2>${l.map(r=>{const e=Ev(r.ev),f=db.fb.some(x=>x.ev===e.id&&x.u===me.id);return`<div class="c row"><div style="flex:3"><b>${E(e.title)}</b><div class="m">${span(e)} ${e.start} · ${E(V(e.venue).name)}</div><p>${r.s==='confirmed'?(r.att?'Attended':'Registered'):'Waiting list'}</p>
+ ${r.att?`<button class="b s" onclick="cert('${r.id}')">Certificate</button> ${f?'<span class="m">Feedback sent</span>':`<button class="b o s" onclick="fbForm('${e.id}')">Give feedback</button>`}`:''}</div>
+ ${r.s==='confirmed'?`<div><div data-qr="${r.code}"></div><div class="m">${r.code}</div></div>`:''}</div>`}).join('')||'<p class="m">You have no tickets yet. Register for an event first.</p>'}`}
+function fbForm(i){modal(`<h2>Event feedback</h2><label>Rating</label><select id="fr">${[5,4,3,2,1].map(n=>`<option>${n}</option>`).join('')}</select><label>Comment</label><textarea id="fc" rows="3"></textarea><p><button class="b" onclick="sendFb('${i}')">Submit</button></p>`)}
+function sendFb(i){db.fb.push({ev:i,u:me.id,rate:+$('#fr').value,txt:g('fc')});save();closeM();toast('Thank you for your feedback.');render()}
+function cert(i){const r=db.regs.find(x=>x.id===i),e=Ev(r.ev);modal(`<div class="cert"><h2>Certificate of Participation</h2><p>This certifies that</p><h2>${E(me.name)}</h2><p>attended <b>${E(e.title)}</b><br>organised by ${E(e.society)} on ${span(e)}.</p></div><p><button class="b" onclick="print()">Print or save as PDF</button></p>`)}
+
+/* ---------- organizer ---------- */
+function evForm(i){const e=i?Ev(i):{};modal(`<h2>${i?'Edit and resubmit':'New event proposal'}</h2>
+ <label>Title</label><input id="f1" value="${E(e.title)}"><label>Description</label><textarea id="f2" rows="2">${E(e.desc)}</textarea>
+ <div class="row"><div><label>Category</label><select id="f3">${CATS.map(c=>`<option ${e.cat===c?'selected':''}>${c}</option>`).join('')}</select></div><div><label>Venue</label><select id="f4">${db.venues.map(v=>`<option value="${v.id}" ${e.venue===v.id?'selected':''}>${E(v.name)} (${v.cap})</option>`).join('')}</select></div></div>
+ <div class="row"><div><label>First day</label><input id="f5" type="date" value="${e.date||''}"></div><div><label>Last day (empty = one day)</label><input id="f11" type="date" value="${e.d2||''}"></div></div>
+ <div class="row"><div><label>Daily start time</label><input id="f6" type="time" value="${e.start||''}"></div><div><label>Daily end time</label><input id="f7" type="time" value="${e.end||''}"></div></div>
+ <div class="row"><div><label>Capacity</label><input id="f8" type="number" min="1" value="${e.cap||''}"></div><div><label>Expected attendance</label><input id="f9" type="number" min="1" value="${e.exp||''}"></div><div><label>Budget (Rs)</label><input id="f10" type="number" min="0" value="${e.budget??''}"></div></div>
+ <div class="err" id="fe"></div><button class="b" onclick="saveEv('${i||''}')">Submit for approval</button>`)}
+function saveEv(i){const e={id:i||id(),title:g('f1'),desc:g('f2'),cat:g('f3'),society:me.society,venue:g('f4'),date:g('f5'),d2:g('f11')||g('f5'),start:g('f6'),end:g('f7'),cap:+g('f8'),exp:+g('f9'),budget:+g('f10'),org:me.id,status:'pending_advisor'},x=$('#fe');
+ if(!e.title||!e.date||!e.start||!e.end||!e.cap||!e.exp)return x.textContent='Fill in every field.';if(e.date<today())return x.textContent='Pick a future date.';if(e.d2<e.date)return x.textContent='The last day cannot be before the first day.';if(e.start>=e.end)return x.textContent='End time must be after start time.';
+ if(e.cap>V(e.venue).cap)return x.textContent=`This venue holds only ${V(e.venue).cap} people.`;
+ const c=clash(e);if(c)return x.textContent=`Venue not available: "${c.title}" already uses it at ${c.start}–${c.end} on that date.`;
+ const old=Ev(e.id);e.log=old?old.log:[];e.log.push({by:me.name,a:'Submitted',c:''});if(old)Object.assign(old,e);else db.events.push(e);
+ db.users.filter(u=>u.role==='advisor'&&u.society===me.society).forEach(u=>note(u.id,`New proposal "${e.title}" is waiting for your review.`));save();closeM();toast('Proposal submitted to the faculty advisor.');tab='mine';render()}
+function vMine(){const l=db.events.filter(e=>e.org===me.id);
+ return`<h2>My events</h2><p><button class="b" onclick="evForm()">New proposal</button></p>${l.map(e=>`<div class="c"><b>${E(e.title)}</b> <span class="st ${e.status}">${ST[e.status]}</span><div class="m">${span(e)} ${e.start}–${e.end} · ${E(V(e.venue).name)} · ${taken(e)}/${e.cap} registered</div>
+ ${e.log.length?`<div class="m">Last note: ${E(e.log[e.log.length-1].by)}: ${E(e.log[e.log.length-1].a)} ${E(e.log[e.log.length-1].c)}</div>`:''}
+ <p>${e.status==='changes'?`<button class="b s" onclick="evForm('${e.id}')">Edit and resubmit</button> `:''}${e.status==='approved'?`<button class="b o s" onclick="manage('${e.id}')">Participants, check-in, feedback</button>`:''}</p></div>`).join('')||'<p class="m">No proposals yet.</p>'}`}
+function manage(i){const e=Ev(i),r=db.regs.filter(x=>x.ev===i&&x.s!=='cancelled'),f=db.fb.filter(x=>x.ev===i),av=f.length?(f.reduce((s,x)=>s+x.rate,0)/f.length).toFixed(1):'-';
+ modal(`<h2>${E(e.title)}</h2><label>Check in: enter or scan the ticket code</label><div class="row"><input id="ck" placeholder="CEMS-..."><button class="b" style="flex:0" onclick="checkin('${i}')">Check in</button></div><div class="err" id="ce"></div>
+ <p><b>${r.filter(x=>x.att).length}</b> attended · <b>${taken(e)}</b> registered · feedback average <b>${av}</b> (${f.length})</p><div class="sc"><table><tr><th>Name</th><th>Email</th><th>Status</th></tr>${r.map(x=>`<tr><td>${E(U(x.u).name)}</td><td>${E(U(x.u).email)}</td><td>${x.att?'Attended':x.s}</td></tr>`).join('')}</table></div>
+ ${f.map(x=>`<p class="m">${'★'.repeat(x.rate)} ${E(x.txt)}</p>`).join('')}<button class="b o s" onclick="expP('${i}')">Export participants (CSV)</button>`)}
+function checkin(i){const c=g('ck'),r=db.regs.find(x=>x.ev===i&&x.code===c&&x.s==='confirmed'),x=$('#ce');if(!r)return x.textContent='Invalid QR code for this event.';if(r.att)return x.textContent='Duplicate: this ticket was already used.';r.att=1;save();manage(i);toast('Checked in: '+U(r.u).name)}
+function expP(i){dl('participants.csv',csv([['Name','Email','Status','Attended'],...db.regs.filter(x=>x.ev===i&&x.s!=='cancelled').map(x=>[U(x.u).name,U(x.u).email,x.s,x.att?'Yes':'No'])]))}
+
+/* ---------- approvals ---------- */
+function vReview(){const st=me.role==='advisor'?'pending_advisor':'pending_admin',l=db.events.filter(e=>e.status===st&&(me.role==='admin'||e.society===me.society));
+ return`<h2>Proposals waiting for you</h2>${l.map(e=>{const c=clash(e);return`<div class="c"><b>${E(e.title)}</b><span class="tag">${e.cat}</span><div class="m">${E(e.society)} · by ${E(U(e.org).name)}<br>${span(e)} ${e.start}–${e.end} · ${E(V(e.venue).name)}<br>Capacity ${e.cap} · expected ${e.exp} · budget Rs ${e.budget}</div><p>${E(e.desc)}</p>
+ ${c?`<p class="st rejected">Venue clash with "${E(c.title)}".</p>`:'<p class="st approved">Venue is available.</p>'}<textarea id="c${e.id}" rows="2" placeholder="Comment (required to reject or request changes)"></textarea>
+ <p><button class="b s" onclick="decide('${e.id}','a')">Approve</button> <button class="b o s" onclick="decide('${e.id}','c')">Request changes</button> <button class="b r s" onclick="decide('${e.id}','r')">Reject</button></p></div>`}).join('')||'<p class="m">Nothing is waiting for review.</p>'}`}
+function decide(i,a){const e=Ev(i),c=g('c'+i);if(a!=='a'&&!c)return toast('Add a comment first.');
+ if(a==='a'){if(me.role==='admin'){if(clash(e))return toast('Cannot approve: venue clash.');e.status='approved'}else{e.status='pending_admin';db.users.filter(u=>u.role==='admin').forEach(u=>note(u.id,`Proposal "${e.title}" passed advisor review.`))}}else e.status=a==='r'?'rejected':'changes';
+ e.log.push({by:me.name,a:{a:'Approved',r:'Rejected',c:'Requested changes'}[a],c});note(e.org,`Email sent: "${e.title}" is now ${ST[e.status].toLowerCase()}. ${c}`);save();toast('Decision recorded.');render()}
+
+/* ---------- admin ---------- */
+function vAdmin(){return`<h2>Venues</h2><div class="c sc"><table><tr><th>Name</th><th>Capacity</th></tr>${db.venues.map(v=>`<tr><td>${E(v.name)}</td><td>${v.cap}</td></tr>`).join('')}</table><div class="row" style="margin-top:8px"><input id="vn" placeholder="Venue name"><input id="vc" type="number" min="1" placeholder="Capacity"><button class="b" style="flex:0" onclick="addV()">Add</button></div></div>
+ <h2>Users and roles</h2><div class="c sc"><table><tr><th>Name</th><th>Email</th><th>Role</th><th>Society</th><th>Active</th></tr>${db.users.map(u=>`<tr><td>${E(u.name)}</td><td>${E(u.email)}</td><td><select onchange="upd('${u.id}','role',this.value)">${['student','organizer','advisor','admin'].map(r=>`<option ${u.role===r?'selected':''}>${r}</option>`).join('')}</select></td><td><input value="${E(u.society)}" onchange="upd('${u.id}','society',this.value)"></td><td><input type="checkbox" ${u.active?'checked':''} ${u.id===me.id?'disabled':''} onchange="upd('${u.id}','active',this.checked?1:0)" style="width:auto"></td></tr>`).join('')}</table></div>`}
+function addV(){const n=g('vn'),c=+g('vc');if(!n||!c)return toast('Enter a name and capacity.');db.venues.push({id:id(),name:n,cap:c});save();render()}
+function upd(i,k,v){U(i)[k]=v;save();toast('Saved.')}
+function rows(){const m={};db.events.filter(e=>e.status==='approved'&&ed(e)<=today()).forEach(e=>{const k=sem(e.date)+'|'+e.society,r=db.regs.filter(x=>x.ev===e.id&&x.s==='confirmed');m[k]=m[k]||[0,0,0];m[k][0]++;m[k][1]+=r.length;m[k][2]+=r.filter(x=>x.att).length});return Object.entries(m).map(([k,v])=>[...k.split('|'),...v])}
+function vRep(){const r=rows();return`<h2>Reports</h2><div class="c sc"><table><tr><th>Semester</th><th>Society</th><th>Events held</th><th>Registrations</th><th>Attendance</th></tr>${r.map(x=>`<tr>${x.map(v=>`<td>${E(v)}</td>`).join('')}</tr>`).join('')||'<tr><td colspan="5" class="m">No events have been held yet.</td></tr>'}</table></div>
+ <button class="b" onclick="dl('report.csv',csv([['Semester','Society','Events held','Registrations','Attendance'],...rows()]))">Export CSV</button> <button class="b o" onclick="print()">Print or save as PDF</button>`}
+function vNotes(){const l=db.notes.filter(x=>x.u===me.id);return`<h2>Notifications</h2>${l.map(n=>`<div class="c">${E(n.m)}<div class="m">${n.t}</div></div>`).join('')||'<p class="m">No notifications yet.</p>'}`}
+const VIEW={events:vEvents,tickets:vTickets,mine:vMine,review:vReview,admin:vAdmin,rep:vRep,notes:vNotes};
+init();
+</script></body></html>
